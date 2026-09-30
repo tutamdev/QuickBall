@@ -55,7 +55,6 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         private const val TAG = "MiniBall"
         private const val CHANNEL_ID = "floating_button"
         private const val NOTIFICATION_ID = 1
-        private const val STASH_DELAY_MS = 2500L
         private const val STASH_ALPHA = 0.4f
 
         fun canDraw(context: Context) = Settings.canDrawOverlays(context)
@@ -166,6 +165,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             Prefs.SIZE_DP, Prefs.OPACITY -> rebuild()
             // Our own snapToEdge() also writes SIDE; only react to changes made in Settings.
             Prefs.SIDE -> if (prefs.onRight != onRight) { onRight = prefs.onRight; removeMenu(); reposition() }
+            Prefs.STASH_DELAY -> resetTimer()
             Prefs.STICK_TO_EDGE -> if (prefs.stickToEdge) resetTimer() else { stopTimer(); unstash(animated = false) }
         }
     }
@@ -363,7 +363,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     private fun resetTimer() {
         handler.removeCallbacks(stashRunnable)
-        if (!isExpanded && !isStashed) handler.postDelayed(stashRunnable, STASH_DELAY_MS)
+        if (!isExpanded && !isStashed) handler.postDelayed(stashRunnable, prefs.stashDelayMs)
     }
 
     private fun stopTimer() = handler.removeCallbacks(stashRunnable)
@@ -453,12 +453,25 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
 
     /* ---------------- Fan menu ---------------- */
 
-    private fun menuItems(): List<FanMenuView.Item> = prefs.actions.map {
-        when (it) {
-            Prefs.ACTION_VOL_UP -> FanMenuView.Item(it, R.drawable.ic_volume_up, getString(R.string.action_vol_up))
-            Prefs.ACTION_VOL_DOWN -> FanMenuView.Item(it, R.drawable.ic_volume_down, getString(R.string.action_vol_down))
-            else -> FanMenuView.Item(it, R.drawable.ic_lock, getString(R.string.action_lock))
+    private fun menuItems(): List<FanMenuView.Item> = prefs.actions.map { key ->
+        val (icon, label) = when (key) {
+            Prefs.ACTION_VOL_UP -> R.drawable.ic_volume_up to R.string.action_vol_up
+            Prefs.ACTION_VOL_DOWN -> R.drawable.ic_volume_down to R.string.action_vol_down
+            Prefs.ACTION_VOL_PANEL -> R.drawable.ic_volume_panel to R.string.action_vol_panel
+            Prefs.ACTION_PLAY_PAUSE -> R.drawable.ic_play_pause to R.string.action_play_pause
+            Prefs.ACTION_NEXT -> R.drawable.ic_next_track to R.string.action_next
+            Prefs.ACTION_PREV -> R.drawable.ic_previous_track to R.string.action_prev
+            Prefs.ACTION_TORCH -> R.drawable.ic_torch to R.string.action_torch
+            Prefs.ACTION_RINGER -> R.drawable.ic_vibrate to R.string.action_ringer
+            Prefs.ACTION_BRIGHT_UP -> R.drawable.ic_brightness_up to R.string.action_bright_up
+            Prefs.ACTION_BRIGHT_DOWN -> R.drawable.ic_brightness_down to R.string.action_bright_down
+            Prefs.ACTION_ROTATE -> R.drawable.ic_screen_rotation to R.string.action_rotate
+            Prefs.ACTION_HOME -> R.drawable.ic_home to R.string.action_home
+            Prefs.ACTION_CAMERA -> R.drawable.ic_camera to R.string.action_camera
+            Prefs.ACTION_WIFI -> R.drawable.ic_wifi to R.string.action_wifi
+            else -> R.drawable.ic_lock to R.string.action_lock
         }
+        FanMenuView.Item(key, icon, getString(label))
     }
 
     private fun expandMenu() {
@@ -524,12 +537,12 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     }
 
     private fun onMenuItem(key: String) {
-        if (key == Prefs.ACTION_LOCK) {
-            collapseMenu()
-            // Let the menu disappear before the screen turns off.
-            handler.postDelayed({ Actions.run(this, key) }, 280)
-        } else {
-            Actions.run(this, key) // menu stays open for repeated volume taps
+        if (key in Prefs.REPEATABLE) {
+            Actions.run(this, key) // menu stays open for repeated taps
+            return
         }
+        collapseMenu()
+        // Let the menu disappear first (important before the screen turns off).
+        handler.postDelayed({ Actions.run(this, key) }, if (key == Prefs.ACTION_LOCK) 280 else 120)
     }
 }

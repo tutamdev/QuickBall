@@ -25,6 +25,16 @@
             app:summary="@string/pref_stick_to_edge_summary"
             app:iconSpaceReserved="false" />
         <SeekBarPreference
+            app:key="stash_delay"
+            app:defaultValue="3"
+            app:min="1"
+            android:max="15"
+            app:showSeekBarValue="true"
+            app:dependency="stick_to_edge"
+            app:title="@string/pref_stash_delay"
+            app:iconSpaceReserved="false"
+            xmlns:android="http://schemas.android.com/apk/res/android" />
+        <SeekBarPreference
             app:key="size_dp"
             app:defaultValue="48"
             app:min="32"
@@ -59,10 +69,11 @@
     <PreferenceCategory app:title="@string/cat_actions" app:iconSpaceReserved="false">
         <MultiSelectListPreference
             app:key="actions"
-            app:defaultValue="@array/action_values"
+            app:defaultValue="@array/action_defaults"
             app:entries="@array/action_entries"
             app:entryValues="@array/action_values"
             app:title="@string/pref_actions"
+            app:summary="@string/pref_actions_summary"
             app:iconSpaceReserved="false" />
         <ListPreference
             app:key="stream"

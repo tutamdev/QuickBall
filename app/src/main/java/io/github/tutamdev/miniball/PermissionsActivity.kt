@@ -82,6 +82,17 @@ class PermissionsActivity : AppCompatActivity() {
             }
         }
 
+        val writeOk = Actions.canWriteSettings(this)
+        row(
+            title = getString(R.string.perm_write_title),
+            detail = getString(R.string.perm_write_detail),
+            ok = writeOk,
+            required = false,
+            actionText = getString(R.string.action_open)
+        ) {
+            open(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, "package:$packageName".toUri()), fallbackToAppDetails = true)
+        }
+
         val battery = getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) == true
         row(
             title = getString(R.string.perm_battery_title),

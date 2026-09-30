@@ -83,7 +83,7 @@ class LockSetupActivity : AppCompatActivity() {
         val current = when (prefs.lockMode) {
             Prefs.LOCK_MODE_WIDGET -> if (LockMethods.isWidgetReady(this))
                 getString(R.string.lock_current_widget, prefs.lockLabel) else getString(R.string.lock_current_widget_missing)
-            Prefs.LOCK_MODE_SHORTCUT -> getString(R.string.lock_current_shortcut, prefs.lockLabel)
+            Prefs.LOCK_MODE_SHORTCUT, Prefs.LOCK_MODE_ACTIVITY -> getString(R.string.lock_current_shortcut, prefs.lockLabel)
             else -> if (Actions.isAdminActive(this)) getString(R.string.lock_current_admin)
             else getString(R.string.lock_current_none)
         }
@@ -131,7 +131,26 @@ class LockSetupActivity : AppCompatActivity() {
                             Intent(Intent.ACTION_CREATE_SHORTCUT).setComponent(LockMethods.shortcutComponent(ri))
                         )
                     } catch (e: Exception) {
-                        toast(getString(R.string.lock_failed))
+                        // Usually: the maker reserves this screen for its own launcher.
+                        toastLong(getString(R.string.lock_shortcut_blocked, "${e.javaClass.simpleName}: ${e.message}"))
+                    }
+                }
+            }
+        }
+
+        // 2b. Public lock activities inside the same system apps
+        val direct = LockMethods.directActivities(this)
+        if (direct.isNotEmpty()) {
+            header(getString(R.string.lock_direct_header))
+            text(getString(R.string.lock_direct_detail), 13f, dim = true)
+            direct.forEach { a ->
+                choiceRow("🔒 ${a.label}", "${a.appLabel} · ${a.component.shortClassName}") {
+                    val error = LockMethods.launchActivity(this, a.component)
+                    if (error == null) {
+                        LockMethods.saveActivity(this, a.component, a.label)
+                        toast(getString(R.string.lock_saved, a.label))
+                    } else {
+                        toastLong(getString(R.string.lock_direct_failed, error))
                     }
                 }
             }
@@ -260,4 +279,5 @@ class LockSetupActivity : AppCompatActivity() {
         }
 
     private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_SHORT).show()
+    private fun toastLong(t: String) = Toast.makeText(this, t, Toast.LENGTH_LONG).show()
 }

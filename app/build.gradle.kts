@@ -14,6 +14,16 @@ android {
         versionName = "1.0"
     }
 
+    // Fixed debug key (personal build) so new CI builds install over the old one.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

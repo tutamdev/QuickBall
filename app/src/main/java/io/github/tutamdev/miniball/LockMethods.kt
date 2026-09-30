@@ -32,6 +32,7 @@ object LockMethods {
     const val KEY_WIDGET_ID = "lock_widget_id"
     const val KEY_SHORTCUT_URI = "lock_shortcut_uri"
     const val KEY_LABEL = "lock_label"
+    const val KEY_ACTIVITY = "lock_activity"
 
     private val LOCK_LABEL = Regex(
         "khóa màn hình|khoá màn hình|khoa man hinh|lock screen|screen lock|screenlock|\\block\\b|onetouchlock|一键锁屏|锁屏",
@@ -145,4 +146,69 @@ object LockMethods {
 
     fun shortcutComponent(info: ResolveInfo) =
         ComponentName(info.activityInfo.packageName, info.activityInfo.name)
+
+    /* ---------------- Direct activity ---------------- */
+
+    data class ActivityChoice(val component: ComponentName, val label: String, val appLabel: String)
+
+    private fun looksLikeLockClass(name: String): Boolean {
+        val n = name.lowercase()
+        if ("clock" in n || "unlock" in n || "block" in n) return false
+        return listOf("lock", "keyguard", "screenoff", "sleep").any { it in n }
+    }
+
+    /**
+     * A home-screen shortcut is just an *exported* activity that the launcher
+     * starts. If the maker's "create shortcut" screen is reserved for its own
+     * launcher, we can still start that public target activity directly.
+     * Only exported activities without a required permission are listed.
+     */
+    fun directActivities(context: Context): List<ActivityChoice> {
+        val pm = context.packageManager
+        val packages = linkedSetOf<String>()
+        shortcutProviders(context)
+            .filter { looksLikeLock(it.loadLabel(pm).toString()) }
+            .forEach { packages += it.activityInfo.packageName }
+        widgetProviders(context).filter { it.likely }.forEach { packages += it.info.provider.packageName }
+
+        val result = mutableListOf<ActivityChoice>()
+        for (pkg in packages) {
+            val info = runCatching {
+                @Suppress("DEPRECATION")
+                pm.getPackageInfo(pkg, PackageManager.GET_ACTIVITIES)
+            }.getOrNull() ?: continue
+            val appLabel = info.applicationInfo?.loadLabel(pm)?.toString() ?: pkg
+            info.activities.orEmpty()
+                .filter { it.exported && it.permission == null && it.enabled }
+                .filter { looksLikeLockClass(it.name) || looksLikeLock(it.loadLabel(pm).toString()) }
+                .forEach {
+                    result += ActivityChoice(ComponentName(pkg, it.name), it.loadLabel(pm).toString(), appLabel)
+                }
+        }
+        return result
+    }
+
+    fun saveActivity(context: Context, component: ComponentName, label: String) {
+        Prefs(context).sp.edit {
+            putString(KEY_ACTIVITY, component.flattenToString())
+            putString(KEY_LABEL, label)
+            putString(Prefs.LOCK_MODE, Prefs.LOCK_MODE_ACTIVITY)
+        }
+    }
+
+    /** @return null on success, otherwise a short error description. */
+    fun launchActivity(context: Context, component: ComponentName? = null): String? {
+        val comp = component ?: Prefs(context).sp.getString(KEY_ACTIVITY, null)
+            ?.let { ComponentName.unflattenFromString(it) } ?: return "not set"
+        return try {
+            context.startActivity(
+                Intent(Intent.ACTION_MAIN).setComponent(comp)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            )
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Direct launch failed: $comp", e)
+            "${e.javaClass.simpleName}: ${e.message}"
+        }
+    }
 }

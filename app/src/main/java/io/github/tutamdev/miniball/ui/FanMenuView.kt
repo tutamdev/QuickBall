@@ -51,9 +51,22 @@ class FanMenuView(
 
     private val buttonSize = context.dp(53f)
     private val iconSize = context.dp(24f)
-    private val radius = context.dp(if (items.size <= 3) 88f else 96f)
-    private val centerX = ballX + ballSize / 2
-    private val centerY = ballY + ballSize / 2
+
+    // Up to 5 buttons on the inner ring, the rest on an outer ring.
+    private val innerCount = if (items.size <= 5) items.size else 5
+    private val outerCount = items.size - innerCount
+    private val innerRadius = context.dp(if (items.size <= 3) 88f else 96f)
+    private val outerRadius = context.dp(158f)
+
+    // Items fly out of the ball centre; the fan itself is kept on screen.
+    private val ballCenterX = ballX + ballSize / 2
+    private val ballCenterY = ballY + ballSize / 2
+    private val centerX = ballCenterX
+    private val centerY: Int = run {
+        val h = context.resources.displayMetrics.heightPixels
+        val reach = (if (outerCount > 0) outerRadius else innerRadius) + buttonSize / 2 + context.dp(8f)
+        if (h > reach * 2) ballCenterY.coerceIn(reach, h - reach) else ballCenterY
+    }
     private val itemViews = ArrayList<FrameLayout>(items.size)
     private var collapsing = false
     private var dismissed = false
@@ -84,23 +97,33 @@ class FanMenuView(
                 }, FrameLayout.LayoutParams(iconSize, iconSize, Gravity.CENTER))
                 setOnClickListener { if (!collapsing) onItemClick(item) }
             }
-            val (ox, oy) = offset(index)
-            view.translationX = -ox
-            view.translationY = -oy
+            val (sx, sy) = startTranslation(index)
+            view.translationX = sx
+            view.translationY = sy
             view.scaleX = 0f; view.scaleY = 0f; view.alpha = 0f
             addView(view, LayoutParams(buttonSize, buttonSize))
             itemViews.add(view)
         }
     }
 
-    /** Offset of item [index] from the ball centre, fanning away from the screen edge. */
+    /** Offset of item [index] from the fan centre, fanning away from the screen edge. */
     private fun offset(index: Int): Pair<Float, Float> {
-        val angle = if (items.size == 1) START_ANGLE + SPAN_ANGLE / 2
-        else START_ANGLE + SPAN_ANGLE / (items.size - 1) * index
+        val inner = index < innerCount
+        val count = if (inner) innerCount else outerCount
+        val pos = if (inner) index else index - innerCount
+        val r = if (inner) innerRadius else outerRadius
+        val angle = if (count == 1) START_ANGLE + SPAN_ANGLE / 2
+        else START_ANGLE + SPAN_ANGLE / (count - 1) * pos
         val rad = Math.toRadians(angle.toDouble())
-        val x = (cos(rad) * radius).toFloat()
-        val y = (-sin(rad) * radius).toFloat()
+        val x = (cos(rad) * r).toFloat()
+        val y = (-sin(rad) * r).toFloat()
         return (if (onRight) x else -x) to y
+    }
+
+    /** Translation that places item [index] exactly on the ball (collapsed state). */
+    private fun startTranslation(index: Int): Pair<Float, Float> {
+        val (ox, oy) = offset(index)
+        return (ballCenterX - (centerX + ox)) to (ballCenterY - (centerY + oy))
     }
 
     fun animateExpand() {
@@ -118,8 +141,8 @@ class FanMenuView(
         collapsing = true
         val last = itemViews.size - 1
         itemViews.forEachIndexed { i, v ->
-            val (ox, oy) = offset(i)
-            val a = v.animate().translationX(-ox).translationY(-oy).scaleX(0f).scaleY(0f).alpha(0f)
+            val (sx, sy) = startTranslation(i)
+            val a = v.animate().translationX(sx).translationY(sy).scaleX(0f).scaleY(0f).alpha(0f)
                 .setDuration(DURATION).setStartDelay((last - i) * STAGGER).setInterpolator(DECELERATE)
             if (i == 0) a.withEndAction { if (!dismissed) { dismissed = true; onDismissFinished() } }
             a.start()

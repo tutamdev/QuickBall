@@ -69,7 +69,7 @@ class SettingsActivity : AppCompatActivity() {
 
             findPreference<Preference>("lock_setup")?.summary = when (prefs.lockMode) {
                 Prefs.LOCK_MODE_WIDGET -> getString(R.string.lock_current_widget, prefs.lockLabel)
-                Prefs.LOCK_MODE_SHORTCUT -> getString(R.string.lock_current_shortcut, prefs.lockLabel)
+                Prefs.LOCK_MODE_SHORTCUT, Prefs.LOCK_MODE_ACTIVITY -> getString(R.string.lock_current_shortcut, prefs.lockLabel)
                 else -> getString(if (Actions.isAdminActive(ctx)) R.string.lock_current_admin else R.string.lock_current_none)
             }
 
