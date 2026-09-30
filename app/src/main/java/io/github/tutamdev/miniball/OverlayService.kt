@@ -1,7 +1,8 @@
 package io.github.tutamdev.miniball
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
-import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -12,11 +13,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -25,16 +23,15 @@ import android.provider.Settings
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewConfiguration
 import android.view.WindowManager
-import android.view.animation.DecelerateInterpolator
-import android.widget.ImageButton
-import android.widget.LinearLayout
+import android.view.animation.PathInterpolator
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import io.github.tutamdev.miniball.ui.BallView
+import io.github.tutamdev.miniball.ui.FanMenuView
+import io.github.tutamdev.miniball.ui.PillView
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -58,7 +55,8 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         private const val TAG = "MiniBall"
         private const val CHANNEL_ID = "floating_button"
         private const val NOTIFICATION_ID = 1
-        private const val MENU_AUTO_CLOSE_MS = 4000L
+        private const val STASH_DELAY_MS = 2500L
+        private const val STASH_ALPHA = 0.4f
 
         fun canDraw(context: Context) = Settings.canDrawOverlays(context)
 
@@ -86,15 +84,25 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     private val wm by lazy { getSystemService(WindowManager::class.java) }
     private val handler = Handler(Looper.getMainLooper())
 
-    private var bubble: BubbleView? = null
-    private var bubbleParams: WindowManager.LayoutParams? = null
-    private var menu: LinearLayout? = null
+    // Windows
+    private var ball: BallView? = null
+    private var ballParams: WindowManager.LayoutParams? = null
+    private var pill: PillView? = null
+    private var pillParams: WindowManager.LayoutParams? = null
+    private var menu: FanMenuView? = null
     private var menuParams: WindowManager.LayoutParams? = null
-    private var snapAnimator: ValueAnimator? = null
-    private var lastOutsideCloseAt = 0L
-    private var bubbleDownAt = 0L
 
-    private val closeMenuRunnable = Runnable { hideMenu() }
+    // State
+    private var ballX = 0
+    private var ballY = 0
+    private var onRight = true
+    private var isExpanded = false
+    private var isStashed = false
+    private var isStashing = false
+    private var isDragging = false
+    private var animator: ValueAnimator? = null
+
+    private val stashRunnable = Runnable { if (!isDragging && !isExpanded) stash() }
 
     /* ---------------- Lifecycle ---------------- */
 
@@ -123,7 +131,7 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             stopSelf()
             return START_NOT_STICKY
         }
-        showBubble()
+        showBall()
         return START_STICKY
     }
 
@@ -140,24 +148,32 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
     override fun onDestroy() {
         prefs.sp.unregisterOnSharedPreferenceChangeListener(this)
         handler.removeCallbacksAndMessages(null)
-        snapAnimator?.cancel()
-        hideMenu()
-        removeBubble()
+        animator?.cancel()
+        removeMenu()
+        removePill()
+        removeBall()
         super.onDestroy()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        hideMenu()
-        placeBubbleFromPrefs()
+        removeMenu()
+        reposition()
     }
 
     override fun onSharedPreferenceChanged(sp: SharedPreferences?, key: String?) {
         when (key) {
-            Prefs.SIZE_DP, Prefs.OPACITY -> { hideMenu(); removeBubble(); showBubble() }
-            Prefs.SIDE -> { hideMenu(); placeBubbleFromPrefs() }
-            Prefs.ACTIONS -> hideMenu()
+            Prefs.SIZE_DP, Prefs.OPACITY -> rebuild()
+            // Our own snapToEdge() also writes SIDE; only react to changes made in Settings.
+            Prefs.SIDE -> if (prefs.onRight != onRight) { onRight = prefs.onRight; removeMenu(); reposition() }
+            Prefs.STICK_TO_EDGE -> if (prefs.stickToEdge) resetTimer() else { stopTimer(); unstash(animated = false) }
         }
+    }
+
+    private fun rebuild() {
+        removeMenu(); removePill(); removeBall()
+        isStashed = false; isStashing = false
+        showBall()
     }
 
     /* ---------------- Notification ---------------- */
@@ -186,14 +202,15 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
             .build()
     }
 
-    /* ---------------- Geometry helpers ---------------- */
+    /* ---------------- Geometry ---------------- */
 
     private fun dp(v: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics
     ).roundToInt()
 
-    private val bubbleSizePx get() = dp(prefs.sizeDp)
-    private val edgeMarginPx get() = dp(4)
+    private val ballSize get() = dp(prefs.sizeDp)
+    private val edgePad get() = dp(6)
+    private val verticalBound get() = dp(100)
 
     private fun screenSize(): Pair<Int, Int> {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -207,240 +224,312 @@ class OverlayService : Service(), SharedPreferences.OnSharedPreferenceChangeList
         }
     }
 
-    private fun overlayParams(w: Int, h: Int, extraFlags: Int = 0) = WindowManager.LayoutParams(
+    private fun edgeX(sw: Int = screenSize().first) = if (onRight) sw - ballSize - edgePad else edgePad
+
+    private fun clampY(y: Int, sh: Int = screenSize().second): Int {
+        val min = verticalBound
+        val max = (sh - ballSize - verticalBound).coerceAtLeast(min)
+        return y.coerceIn(min, max)
+    }
+
+    private fun overlayParams(w: Int, h: Int) = WindowManager.LayoutParams(
         w, h,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or extraFlags,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT
-    ).apply { gravity = Gravity.TOP or Gravity.START }
+    ).apply {
+        gravity = Gravity.TOP or Gravity.START
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+    }
 
-    /* ---------------- Bubble ---------------- */
+    private fun update(view: View?, params: WindowManager.LayoutParams?) {
+        if (view == null || params == null) return
+        runCatching { wm.updateViewLayout(view, params) }
+    }
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun showBubble() {
-        if (bubble != null) return
-        val size = bubbleSizePx
-        val view = BubbleView(this).apply { alpha = prefs.opacity }
-        val params = overlayParams(size, size)
-        bubble = view
-        bubbleParams = params
+    /* ---------------- Ball ---------------- */
 
-        val slop = ViewConfiguration.get(this).scaledTouchSlop
-        var downRawX = 0f
-        var downRawY = 0f
+    private fun showBall() {
+        if (ball != null) return
+        onRight = prefs.onRight
+        val (sw, sh) = screenSize()
+        ballX = edgeX(sw)
+        ballY = clampY((prefs.yFraction * sh).roundToInt(), sh)
+
+        val alphaByte = (prefs.opacity * 255).roundToInt().coerceIn(40, 255)
+        val view = BallView(this, ballSize, Color.argb(alphaByte, 0x2C, 0x2C, 0x2C))
+        val params = overlayParams(ballSize, ballSize).apply { x = ballX; y = ballY }
+
         var startX = 0
         var startY = 0
-        var dragging = false
-
-        view.setOnTouchListener { _, e ->
-            when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    snapAnimator?.cancel()
-                    bubbleDownAt = System.currentTimeMillis()
-                    downRawX = e.rawX; downRawY = e.rawY
-                    startX = params.x; startY = params.y
-                    dragging = false
-                    view.alpha = 1f
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = e.rawX - downRawX
-                    val dy = e.rawY - downRawY
-                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) {
-                        dragging = true
-                        hideMenu()
-                    }
-                    if (dragging) {
-                        val (sw, sh) = screenSize()
-                        params.x = (startX + dx).roundToInt().coerceIn(0, sw - size)
-                        params.y = (startY + dy).roundToInt().coerceIn(0, sh - size)
-                        updateLayout(view, params)
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    view.alpha = prefs.opacity
-                    if (dragging) snapToEdge() else onBubbleTap()
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    view.alpha = prefs.opacity
-                    if (dragging) snapToEdge()
-                }
+        var screenW = sw
+        var screenH = sh
+        view.listener = object : BallView.Listener {
+            override fun onTouchDown() {
+                if (isStashing) return
+                stopTimer()
+                animator?.cancel()
+                if (!isStashed) { view.animate().cancel(); view.alpha = 1f }
+                startX = ballX; startY = ballY
+                val (w, h) = screenSize(); screenW = w; screenH = h
             }
-            true
+
+            override fun onDragMove(dx: Float, dy: Float) {
+                if (isStashing) return
+                isDragging = true
+                ballX = (startX + dx).roundToInt().coerceIn(0, screenW - ballSize)
+                ballY = clampY((startY + dy).roundToInt(), screenH)
+                params.x = ballX; params.y = ballY
+                update(view, params)
+            }
+
+            override fun onDragEnd() {
+                isDragging = false
+                snapToEdge()
+            }
+
+            override fun onTap() {
+                isDragging = false
+                if (isStashed || isStashing) unstash()
+                expandMenu()
+            }
         }
 
         try {
             wm.addView(view, params)
         } catch (e: Exception) {
-            // Overlay permission revoked while running.
-            Log.w(TAG, "addView failed", e)
-            bubble = null
+            Log.w(TAG, "addView failed (overlay permission revoked?)", e)
             stopSelf()
             return
         }
-        placeBubbleFromPrefs()
+        ball = view
+        ballParams = params
+        isStashed = false
+        resetTimer()
     }
 
-    private fun removeBubble() {
-        bubble?.let { runCatching { wm.removeView(it) } }
-        bubble = null
-        bubbleParams = null
-    }
-
-    private fun placeBubbleFromPrefs() {
-        val view = bubble ?: return
-        val params = bubbleParams ?: return
-        val (sw, sh) = screenSize()
-        val size = bubbleSizePx
-        params.x = if (prefs.onRight) sw - size - edgeMarginPx else edgeMarginPx
-        params.y = (prefs.yFraction * sh).roundToInt().coerceIn(0, (sh - size).coerceAtLeast(0))
-        updateLayout(view, params)
+    private fun removeBall() {
+        ball?.let { runCatching { wm.removeView(it) } }
+        ball = null
+        ballParams = null
     }
 
     private fun snapToEdge() {
-        val view = bubble ?: return
-        val params = bubbleParams ?: return
         val (sw, sh) = screenSize()
-        val size = bubbleSizePx
-        val onRight = params.x + size / 2 > sw / 2
-        val targetX = if (onRight) sw - size - edgeMarginPx else edgeMarginPx
-        prefs.savePosition(onRight, if (sh > 0) params.y.toFloat() / sh else 0.4f)
+        onRight = ballX + ballSize / 2 > sw / 2
+        prefs.savePosition(onRight, if (sh > 0) ballY.toFloat() / sh else 0.4f)
+        val target = edgeX(sw)
+        val duration = (abs(target - ballX).toFloat() / sw * 350f).coerceIn(180f, 320f).toLong()
+        animateBallX(target, duration) { resetTimer() }
+    }
 
-        snapAnimator?.cancel()
-        snapAnimator = ValueAnimator.ofInt(params.x, targetX).apply {
-            duration = 200
-            interpolator = DecelerateInterpolator()
+    private fun reposition() {
+        val (sw, sh) = screenSize()
+        ballX = edgeX(sw)
+        ballY = clampY((prefs.yFraction * sh).roundToInt(), sh)
+        ballParams?.let { it.x = ballX; it.y = ballY; update(ball, it) }
+        if (isStashed) { removePill(); showPill() }
+    }
+
+    private fun animateBallX(target: Int, duration: Long, alpha: Float? = null, onEnd: (() -> Unit)? = null) {
+        val view = ball ?: return
+        val params = ballParams ?: return
+        val startAlpha = view.alpha
+        animator?.cancel()
+        var cancelled = false
+        animator = ValueAnimator.ofInt(ballX, target).apply {
+            this.duration = duration
+            interpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
             addUpdateListener {
-                params.x = it.animatedValue as Int
-                updateLayout(view, params)
+                ballX = it.animatedValue as Int
+                params.x = ballX
+                update(view, params)
+                if (alpha != null) view.alpha = startAlpha + (alpha - startAlpha) * it.animatedFraction
             }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationCancel(animation: Animator) { cancelled = true }
+                override fun onAnimationEnd(animation: Animator) { if (!cancelled) onEnd?.invoke() }
+            })
             start()
         }
     }
 
-    private fun onBubbleTap() {
-        // A tap on the bubble also counts as an "outside" touch for the menu window;
-        // don't immediately reopen a menu that was just closed by that same tap.
-        if (lastOutsideCloseAt >= bubbleDownAt - 150) return
-        if (menu != null) hideMenu() else showMenu()
+    /* ---------------- Stash to edge (Quick Ball style) ---------------- */
+
+    private fun resetTimer() {
+        handler.removeCallbacks(stashRunnable)
+        if (!isExpanded && !isStashed) handler.postDelayed(stashRunnable, STASH_DELAY_MS)
     }
 
-    /* ---------------- Menu ---------------- */
+    private fun stopTimer() = handler.removeCallbacks(stashRunnable)
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun showMenu() {
-        val bParams = bubbleParams ?: return
-        val actions = prefs.actions
-        if (actions.isEmpty()) return
+    private fun stash() {
+        if (isExpanded || isStashed) return
+        val view = ball ?: return
+        if (!prefs.stickToEdge) {
+            // Just fade out a little, like Quick Ball without "stick to edge".
+            view.animate().alpha(STASH_ALPHA + 0.2f).setDuration(250).start()
+            return
+        }
+        val (sw, _) = screenSize()
+        val target = if (onRight) sw else -ballSize
+        isStashing = true
+        animateBallX(target, 250L, alpha = STASH_ALPHA) {
+            isStashing = false
+            isStashed = true
+            // Hide the off-screen ball completely so it can never block touches at the edge.
+            view.visibility = View.INVISIBLE
+            ballParams?.let {
+                it.flags = it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                update(view, it)
+            }
+            showPill()
+        }
+    }
 
-        val itemSize = dp(48)
-        val pad = dp(6)
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(pad, pad, pad, pad)
-            background = GradientDrawable().apply {
-                cornerRadius = dp(28).toFloat()
-                setColor(Color.argb(230, 32, 32, 36))
+    private fun unstash(animated: Boolean = true) {
+        val view = ball ?: return
+        val params = ballParams ?: return
+        view.animate().cancel()
+        if (!isStashed && !isStashing) {
+            view.alpha = 1f
+            return
+        }
+        removePill()
+        isStashing = false
+        isStashed = false
+        view.visibility = View.VISIBLE
+        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        val (sw, _) = screenSize()
+        val target = edgeX(sw)
+        if (animated) {
+            ballX = if (onRight) sw - ballSize else 0
+            params.x = ballX
+            update(view, params)
+            animateBallX(target, 250L, alpha = 1f) { resetTimer() }
+        } else {
+            animator?.cancel()
+            ballX = target; params.x = target; view.alpha = 1f
+            update(view, params)
+            resetTimer()
+        }
+    }
+
+    private fun showPill() {
+        if (pill != null) return
+        val (sw, _) = screenSize()
+        val w = dp(25)
+        val h = dp(48)
+        val view = PillView(this, onRight, 0xCC777777.toInt()).apply {
+            onTap = {
+                removePill()
+                unstash()
+                expandMenu()
             }
         }
-        for (action in actions) {
-            panel.addView(ImageButton(this).apply {
-                setImageResource(
-                    when (action) {
-                        Prefs.ACTION_VOL_UP -> R.drawable.ic_volume_up
-                        Prefs.ACTION_VOL_DOWN -> R.drawable.ic_volume_down
-                        else -> R.drawable.ic_lock
-                    }
-                )
-                contentDescription = getString(
-                    when (action) {
-                        Prefs.ACTION_VOL_UP -> R.string.action_vol_up
-                        Prefs.ACTION_VOL_DOWN -> R.string.action_vol_down
-                        else -> R.string.action_lock
-                    }
-                )
-                setBackgroundResource(android.R.drawable.list_selector_background)
-                setColorFilter(Color.WHITE)
-                setOnClickListener { onMenuAction(action) }
-            }, LinearLayout.LayoutParams(itemSize, itemSize))
+        val params = overlayParams(w, h).apply {
+            x = if (onRight) sw - w else 0
+            y = ballY + (ballSize - h) / 2
         }
-
-        val width = itemSize * actions.size + pad * 2
-        val height = itemSize + pad * 2
-        val (sw, sh) = screenSize()
-        val bSize = bubbleSizePx
-        val onRight = bParams.x + bSize / 2 > sw / 2
-        val params = overlayParams(
-            width, height,
-            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
-        ).apply {
-            x = if (onRight) bParams.x - width - dp(8) else bParams.x + bSize + dp(8)
-            x = x.coerceIn(0, (sw - width).coerceAtLeast(0))
-            y = (bParams.y + bSize / 2 - height / 2).coerceIn(0, (sh - height).coerceAtLeast(0))
-        }
-
-        panel.setOnTouchListener { _, e ->
-            if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) {
-                lastOutsideCloseAt = System.currentTimeMillis()
-                hideMenu()
-                true
-            } else false
-        }
-
         try {
-            wm.addView(panel, params)
-            menu = panel
-            menuParams = params
-            scheduleMenuClose()
+            wm.addView(view, params)
+            pill = view
+            pillParams = params
         } catch (e: Exception) {
-            Log.w(TAG, "Menu addView failed", e)
+            Log.w(TAG, "pill addView failed", e)
         }
     }
 
-    private fun hideMenu() {
-        handler.removeCallbacks(closeMenuRunnable)
+    private fun removePill() {
+        pill?.let { runCatching { wm.removeView(it) } }
+        pill = null
+        pillParams = null
+    }
+
+    /* ---------------- Fan menu ---------------- */
+
+    private fun menuItems(): List<FanMenuView.Item> = prefs.actions.map {
+        when (it) {
+            Prefs.ACTION_VOL_UP -> FanMenuView.Item(it, R.drawable.ic_volume_up, getString(R.string.action_vol_up))
+            Prefs.ACTION_VOL_DOWN -> FanMenuView.Item(it, R.drawable.ic_volume_down, getString(R.string.action_vol_down))
+            else -> FanMenuView.Item(it, R.drawable.ic_lock, getString(R.string.action_lock))
+        }
+    }
+
+    private fun expandMenu() {
+        if (menu != null) return
+        val items = menuItems()
+        if (items.isEmpty()) return
+        isExpanded = true
+        stopTimer()
+        ball?.setExpanded(true)
+
+        val (sw, _) = screenSize()
+        val view = FanMenuView(
+            context = this,
+            ballX = edgeX(sw),
+            ballY = ballY,
+            ballSize = ballSize,
+            onRight = onRight,
+            items = items,
+            onDismiss = { collapseMenu() },
+            onDismissFinished = {
+                removeMenu()
+                resetTimer()
+            },
+            onItemClick = { item -> onMenuItem(item.key) }
+        )
+        val params = overlayParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT
+        )
+        try {
+            wm.addView(view, params)
+            menu = view
+            menuParams = params
+            view.animateExpand()
+        } catch (e: Exception) {
+            Log.w(TAG, "menu addView failed", e)
+            isExpanded = false
+            ball?.setExpanded(false)
+        }
+    }
+
+    private fun collapseMenu() {
+        isExpanded = false
+        ball?.setExpanded(false)
+        val view = menu ?: return
+        val params = menuParams ?: return
+        // Let touches reach the app below while the collapse animation runs.
+        // Android 12+ only passes touches through overlays with alpha <= 0.8.
+        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        params.alpha = 0.8f
+        update(view, params)
+        view.animateCollapse()
+    }
+
+    private fun removeMenu() {
         menu?.let { runCatching { wm.removeView(it) } }
         menu = null
         menuParams = null
+        if (isExpanded) {
+            isExpanded = false
+            ball?.setExpanded(false, animate = false)
+        }
     }
 
-    private fun scheduleMenuClose() {
-        handler.removeCallbacks(closeMenuRunnable)
-        handler.postDelayed(closeMenuRunnable, MENU_AUTO_CLOSE_MS)
-    }
-
-    private fun onMenuAction(action: String) {
-        if (action == Prefs.ACTION_LOCK) {
-            hideMenu()
+    private fun onMenuItem(key: String) {
+        if (key == Prefs.ACTION_LOCK) {
+            collapseMenu()
             // Let the menu disappear before the screen turns off.
-            handler.postDelayed({ Actions.run(this, action) }, 150)
+            handler.postDelayed({ Actions.run(this, key) }, 280)
         } else {
-            Actions.run(this, action)
-            scheduleMenuClose() // keep the menu open for repeated volume taps
-        }
-    }
-
-    private fun updateLayout(view: View, params: WindowManager.LayoutParams) {
-        runCatching { wm.updateViewLayout(view, params) }
-    }
-
-    /* ---------------- Bubble drawing ---------------- */
-
-    private class BubbleView(context: Context) : View(context) {
-        private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(200, 30, 30, 34) }
-        private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-        }
-        private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(200, 255, 255, 255) }
-
-        override fun onDraw(canvas: Canvas) {
-            val c = width / 2f
-            val r = c
-            canvas.drawCircle(c, c, r, fill)
-            ring.strokeWidth = r * 0.10f
-            canvas.drawCircle(c, c, r * 0.62f, ring)
-            canvas.drawCircle(c, c, r * 0.32f, dot)
+            Actions.run(this, key) // menu stays open for repeated volume taps
         }
     }
 }

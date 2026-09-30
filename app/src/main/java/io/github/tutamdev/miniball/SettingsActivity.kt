@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
-import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
@@ -57,8 +56,8 @@ class SettingsActivity : AppCompatActivity() {
                 true
             }
 
-            findPreference<ListPreference>(Prefs.LOCK_MODE)?.setOnPreferenceChangeListener { _, newValue ->
-                findPreference<ListPreference>(Prefs.LOCK_APP)?.isVisible = newValue == Prefs.LOCK_MODE_APP
+            findPreference<Preference>("lock_setup")?.setOnPreferenceClickListener {
+                startActivity(Intent(requireContext(), LockSetupActivity::class.java))
                 true
             }
         }
@@ -68,13 +67,10 @@ class SettingsActivity : AppCompatActivity() {
             val ctx = requireContext()
             val prefs = Prefs(ctx)
 
-            // Lock app list is built at runtime; likely "lock screen" apps come first.
-            findPreference<ListPreference>(Prefs.LOCK_APP)?.apply {
-                val apps = Actions.launcherApps(ctx)
-                entries = apps.map { if (it.looksLikeLock) "🔒 ${it.label}" else it.label }.toTypedArray()
-                entryValues = apps.map { it.packageName }.toTypedArray()
-                isVisible = prefs.lockMode == Prefs.LOCK_MODE_APP
-                if (value.isNullOrEmpty()) apps.firstOrNull { it.looksLikeLock }?.let { value = it.packageName }
+            findPreference<Preference>("lock_setup")?.summary = when (prefs.lockMode) {
+                Prefs.LOCK_MODE_WIDGET -> getString(R.string.lock_current_widget, prefs.lockLabel)
+                Prefs.LOCK_MODE_SHORTCUT -> getString(R.string.lock_current_shortcut, prefs.lockLabel)
+                else -> getString(if (Actions.isAdminActive(ctx)) R.string.lock_current_admin else R.string.lock_current_none)
             }
 
             findPreference<Preference>("permissions")?.summary = getString(

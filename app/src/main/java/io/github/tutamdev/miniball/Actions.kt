@@ -47,7 +47,16 @@ object Actions {
 
     private fun lock(context: Context) {
         val prefs = Prefs(context)
-        if (prefs.lockMode == Prefs.LOCK_MODE_APP && launchLockApp(context, prefs.lockApp)) return
+        val done = when (prefs.lockMode) {
+            Prefs.LOCK_MODE_WIDGET -> LockMethods.clickWidget(context)
+            Prefs.LOCK_MODE_SHORTCUT -> LockMethods.launchShortcut(context)
+            Prefs.LOCK_MODE_APP -> launchLockApp(context, prefs.lockApp)
+            else -> false
+        }
+        if (done) return
+        if (prefs.lockMode != Prefs.LOCK_MODE_ADMIN) {
+            Log.w(TAG, "Lock method ${prefs.lockMode} failed, falling back to device admin")
+        }
 
         if (isAdminActive(context)) {
             try {
@@ -59,7 +68,7 @@ object Actions {
         }
         Toast.makeText(context, R.string.lock_not_configured, Toast.LENGTH_LONG).show()
         context.startActivity(
-            Intent(context, PermissionsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Intent(context, LockSetupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }
 

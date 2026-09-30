@@ -20,6 +20,7 @@ class Prefs(context: Context) {
         const val LOCK_MODE = "lock_mode"
         const val LOCK_APP = "lock_app"
         const val STREAM = "stream"
+        const val STICK_TO_EDGE = "stick_to_edge"
 
         const val ACTION_VOL_UP = "vol_up"
         const val ACTION_VOL_DOWN = "vol_down"
@@ -30,6 +31,8 @@ class Prefs(context: Context) {
 
         const val LOCK_MODE_ADMIN = "admin"
         const val LOCK_MODE_APP = "app"
+        const val LOCK_MODE_WIDGET = "widget"
+        const val LOCK_MODE_SHORTCUT = "shortcut"
     }
 
     val enabled get() = sp.getBoolean(ENABLED, true)
@@ -46,6 +49,8 @@ class Prefs(context: Context) {
     val lockMode get() = sp.getString(LOCK_MODE, LOCK_MODE_ADMIN) ?: LOCK_MODE_ADMIN
     val lockApp get() = sp.getString(LOCK_APP, "").orEmpty()
     val stream get() = sp.getString(STREAM, "music") ?: "music"
+    val stickToEdge get() = sp.getBoolean(STICK_TO_EDGE, true)
+    val lockLabel get() = sp.getString(LockMethods.KEY_LABEL, "").orEmpty()
 
     fun savePosition(onRight: Boolean, yFraction: Float) = sp.edit {
         putString(SIDE, if (onRight) "right" else "left")

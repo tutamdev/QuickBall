@@ -13,7 +13,7 @@
     <string name="action_disable">Tắt</string>
 
     <string name="volume_blocked_dnd">Không đổi được âm lượng chuông khi đang bật Không làm phiền</string>
-    <string name="lock_not_configured">Chưa bật Quản trị thiết bị hoặc chưa chọn app khóa màn hình</string>
+    <string name="lock_not_configured">Chưa thiết lập được cách khóa màn hình — hãy chọn trong \"Cách khóa màn hình\"</string>
     <string name="admin_explanation">MiniBall chỉ dùng quyền này để tắt màn hình khi bạn bấm nút Khóa. Không có quyền xóa dữ liệu hay đổi mật khẩu.</string>
 
     <string name="permissions_title">Quyền cần thiết</string>
@@ -45,4 +45,29 @@
     <string name="perm_launch_title">Khởi chạy ứng dụng (Huawei)</string>
     <string name="perm_launch_detail">App không tự kiểm tra được. Chọn Quản lý thủ công, bật Tự khởi chạy, Khởi chạy phụ, Chạy trong nền.</string>
     <string name="huawei_guide">Thiết lập Huawei để chạy ổn định:\n1. Cài đặt → Ứng dụng → Khởi chạy ứng dụng → MiniBall → Quản lý thủ công → bật cả 3 công tắc.\n2. Cài đặt → Pin → Tối ưu hóa pin → MiniBall → Không cho phép.\n3. Mở Đa nhiệm, kéo thẻ MiniBall xuống để khóa.\n4. Nếu bạn Buộc dừng app, nút nổi sẽ không tự chạy lại cho tới khi mở app.</string>
+    <string name="pref_stick_to_edge">Tự thu vào cạnh</string>
+    <string name="pref_stick_to_edge_summary">Sau 2,5 giây không dùng, bóng thu vào mép màn hình thành một vạch nhỏ</string>
+
+    <string name="lock_setup_title">Cách khóa màn hình</string>
+    <string name="lock_current_widget">Đang dùng tiện ích: %1$s</string>
+    <string name="lock_current_widget_missing">Tiện ích đã chọn không còn — hãy chọn lại</string>
+    <string name="lock_current_shortcut">Đang dùng lối tắt: %1$s</string>
+    <string name="lock_current_admin">Đang dùng Quản trị thiết bị (lần mở sau cần mã PIN)</string>
+    <string name="lock_current_none">Chưa thiết lập</string>
+    <string name="lock_test">Thử khóa (sau 2 giây)</string>
+    <string name="lock_test_hint">Màn hình sẽ khóa sau 2 giây…</string>
+    <string name="lock_widget_header">1. Tiện ích của máy (khuyên dùng)</string>
+    <string name="lock_widget_detail">Chọn tiện ích "Khoá màn hình" của Huawei. MiniBall giữ tiện ích này giống như màn hình chính và bấm vào nó giúp bạn, nên vẫn mở khóa được bằng vân tay. Hệ thống sẽ hỏi bạn có cho phép tạo tiện ích không.</string>
+    <string name="lock_widget_none">Không tìm thấy tiện ích nào.</string>
+    <string name="lock_widget_show_all">Hiện/ẩn các tiện ích khác (%1$d)</string>
+    <string name="lock_widget_bind_failed">Hệ thống không cho phép gắn tiện ích này</string>
+    <string name="lock_shortcut_header">2. Lối tắt</string>
+    <string name="lock_shortcut_detail">Một số máy cung cấp khóa màn hình dạng lối tắt.</string>
+    <string name="lock_shortcut_unsupported">Lối tắt này chỉ dành cho launcher, không dùng được</string>
+    <string name="lock_admin_header">3. Quản trị thiết bị</string>
+    <string name="lock_admin_detail">Luôn hoạt động, nhưng Android bắt buộc nhập mã PIN/mật khẩu ở lần mở khóa tiếp theo (không dùng vân tay).</string>
+    <string name="lock_admin_enable">Bật Quản trị thiết bị và dùng cách này</string>
+    <string name="lock_admin_use">Dùng Quản trị thiết bị</string>
+    <string name="lock_saved">Đã chọn: %1$s</string>
+    <string name="lock_failed">Không mở được</string>
 </resources>

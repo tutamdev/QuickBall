@@ -18,6 +18,12 @@
             app:title="@string/pref_auto_start"
             app:summary="@string/pref_auto_start_summary"
             app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat
+            app:key="stick_to_edge"
+            app:defaultValue="true"
+            app:title="@string/pref_stick_to_edge"
+            app:summary="@string/pref_stick_to_edge_summary"
+            app:iconSpaceReserved="false" />
         <SeekBarPreference
             app:key="size_dp"
             app:defaultValue="48"
@@ -66,18 +72,9 @@
             app:title="@string/pref_stream"
             app:useSimpleSummaryProvider="true"
             app:iconSpaceReserved="false" />
-        <ListPreference
-            app:key="lock_mode"
-            app:defaultValue="admin"
-            app:entries="@array/lock_mode_entries"
-            app:entryValues="@array/lock_mode_values"
-            app:title="@string/pref_lock_mode"
-            app:useSimpleSummaryProvider="true"
-            app:iconSpaceReserved="false" />
-        <ListPreference
-            app:key="lock_app"
-            app:title="@string/pref_lock_app"
-            app:useSimpleSummaryProvider="true"
+        <Preference
+            app:key="lock_setup"
+            app:title="@string/lock_setup_title"
             app:iconSpaceReserved="false" />
     </PreferenceCategory>
 </PreferenceScreen>

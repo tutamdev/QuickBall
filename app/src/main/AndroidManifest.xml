@@ -14,6 +14,13 @@
     <!-- Lets the "lock app" picker see launcher apps (no QUERY_ALL_PACKAGES needed). -->
     <queries>
         <package android:name="com.huawei.systemmanager" />
+        <!-- See widget providers (e.g. Huawei "Khoá màn hình") and legacy shortcut providers -->
+        <intent>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.CREATE_SHORTCUT" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -36,6 +43,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".LockSetupActivity"
+            android:exported="false"
+            android:label="@string/lock_setup_title" />
 
         <activity
             android:name=".PermissionsActivity"
