@@ -15,12 +15,31 @@ import io.github.chayanforyou.quickball.core.QuickBallService
 
 object PermissionUtils {
 
-    fun isAccessibilityServiceEnabled(context: Context): Boolean {
+    /**
+     * True if the user switched Quick Ball on in Accessibility settings.
+     * Checks the real system setting first (updates immediately), then the list of
+     * connected services (which lags on HarmonyOS while the service is binding).
+     */
+    fun isAccessibilityServiceEnabled(context: Context): Boolean =
+        isEnabledInSecureSettings(context) || isAccessibilityServiceConnected(context)
+
+    /** True only once the system has actually bound/connected the service. */
+    fun isAccessibilityServiceConnected(context: Context): Boolean {
         val manager = getSystemService(context, AccessibilityManager::class.java)
-        val services = manager?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            ?: return false
+        val services = runCatching {
+            manager?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        }.getOrNull() ?: return false
         return services.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
     }
+
+    private fun isEnabledInSecureSettings(context: Context): Boolean = runCatching {
+        val cr = context.contentResolver
+        if (Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 0) != 1) return false
+        val own = ComponentName(context, QuickBallService::class.java)
+        Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+            .split(':')
+            .any { ComponentName.unflattenFromString(it) == own }
+    }.getOrDefault(false)
 
     fun canModifySystemSettings(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

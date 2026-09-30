@@ -38,6 +38,7 @@ import io.github.chayanforyou.quickball.ui.floating.GestureListener
 import io.github.chayanforyou.quickball.ui.floating.FloatTouchView
 import io.github.chayanforyou.quickball.ui.floating.FloatPanelView
 import io.github.chayanforyou.quickball.ui.floating.SideKickView
+import io.github.chayanforyou.quickball.utils.CrashRecorder
 import io.github.chayanforyou.quickball.utils.DensityUtils
 import io.github.chayanforyou.quickball.utils.getScreenSize
 import io.github.chayanforyou.quickball.utils.performHapticFeedback
@@ -191,18 +192,33 @@ class QuickBallService : AccessibilityService() {
 
     /* -------------------- Lifecycle -------------------- */
 
+    override fun onCreate() {
+        super.onCreate()
+        CrashRecorder.install(this)
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instanceRef = WeakReference(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        refreshImePackages()
-        initFloatingBall()
-        registerScreenReceiver()
-        prefs.lastServiceConnectedAt = System.currentTimeMillis()
-        ServiceStatusNotifier.cancel(this)
-        KeepAliveService.syncWithPreference(this)
-        refreshBallVisibility()
+        // Original behaviour: create the ball. Guarded so a failure is recorded, not fatal.
+        safely("initFloatingBall") { initFloatingBall() }
+        safely("registerScreenReceiver") { registerScreenReceiver() }
+        // Fork additions — none of these may take the service down.
+        safely("refreshImePackages") { refreshImePackages() }
+        safely("saveConnectedAt") { prefs.lastServiceConnectedAt = System.currentTimeMillis() }
+        safely("cancelNotification") { ServiceStatusNotifier.cancel(this) }
+        safely("keepAlive") { KeepAliveService.syncWithPreference(this) }
+        safely("refreshBallVisibility") { refreshBallVisibility() }
         Log.i(TAG, "Accessibility service connected")
+    }
+
+    private inline fun safely(where: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Throwable) {
+            CrashRecorder.record(this, "QuickBallService.$where", e)
+        }
     }
 
     /**

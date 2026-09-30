@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.LaunchedEffect
 import io.github.chayanforyou.quickball.R
 import io.github.chayanforyou.quickball.ui.screens.onboarding.components.PermissionCard
 import io.github.chayanforyou.quickball.utils.PermissionUtils
@@ -55,6 +56,15 @@ fun OnboardingScreen(
     }
     var canWriteSettings by remember {
         mutableStateOf(PermissionUtils.canModifySystemSettings(context))
+    }
+
+    // HarmonyOS may finish connecting the service a few seconds after we resume.
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            isAccessibilityGranted = PermissionUtils.isAccessibilityServiceEnabled(context)
+            canWriteSettings = PermissionUtils.canModifySystemSettings(context)
+        }
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current

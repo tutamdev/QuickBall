@@ -166,4 +166,7 @@
     <string name="service_off_notification_text">Hệ thống đã tắt dịch vụ trợ năng của Quick Ball. Chạm để bật lại.</string>
     <string name="tile_subtitle_running">Đang chạy</string>
     <string name="tile_subtitle_service_off">Chạm để sửa</string>
+    <string name="last_error_header">Lỗi gần nhất (gửi cho nhà phát triển)</string>
+    <string name="action_copy_error">Sao chép lỗi</string>
+    <string name="action_clear">Xóa</string>
 </resources>

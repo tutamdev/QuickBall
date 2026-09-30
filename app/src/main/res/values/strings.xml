@@ -218,4 +218,7 @@
     <string name="service_off_notification_text">The system disabled its accessibility service. Tap to turn it back on.</string>
     <string name="tile_subtitle_running">Running</string>
     <string name="tile_subtitle_service_off">Tap to fix</string>
+    <string name="last_error_header">Last error (send this to the developer)</string>
+    <string name="action_copy_error">Copy error</string>
+    <string name="action_clear">Clear</string>
 </resources>

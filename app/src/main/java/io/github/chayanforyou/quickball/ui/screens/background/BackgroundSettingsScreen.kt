@@ -55,6 +55,7 @@ import io.github.chayanforyou.quickball.core.persistence.RecentsHelper
 import io.github.chayanforyou.quickball.domain.AppPreference
 import io.github.chayanforyou.quickball.ui.screens.home.components.SettingSwitchRow
 import io.github.chayanforyou.quickball.ui.theme.AppCardDefaults
+import io.github.chayanforyou.quickball.utils.CrashRecorder
 import io.github.chayanforyou.quickball.utils.HuaweiHelper
 import io.github.chayanforyou.quickball.utils.PermissionUtils
 import java.text.DateFormat
@@ -85,6 +86,7 @@ fun BackgroundSettingsScreen(
     val canWriteSettings = remember(tick) { PermissionUtils.canModifySystemSettings(context) }
     val batteryOk = remember(tick) { HuaweiHelper.isIgnoringBatteryOptimizations(context) }
     val lastConnected = remember(tick) { prefs.lastServiceConnectedAt }
+    val lastCrash = remember(tick) { CrashRecorder.last(context) }
 
     var excludeFromRecents by remember { mutableStateOf(prefs.isExcludeFromRecentsEnabled) }
     var keepAlive by remember { mutableStateOf(prefs.isKeepAliveNotificationEnabled) }
@@ -111,6 +113,29 @@ fun BackgroundSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // ---------- Last crash (diagnostics) ----------
+            if (lastCrash != null) {
+                SectionLabel(stringResource(R.string.last_error_header))
+                SectionCard {
+                    SelectionContainer {
+                        Text(
+                            text = lastCrash.take(1500),
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Row {
+                        TextButton(onClick = { clipboard.setText(AnnotatedString(lastCrash)) }) {
+                            Text(stringResource(R.string.action_copy_error))
+                        }
+                        TextButton(onClick = { CrashRecorder.clear(context); tick++ }) {
+                            Text(stringResource(R.string.action_clear))
+                        }
+                    }
+                }
+            }
+
             // ---------- Status ----------
             SectionLabel(stringResource(R.string.background_status_header))
             SectionCard {
@@ -121,8 +146,12 @@ fun BackgroundSettingsScreen(
                         accessibilityOn -> stringResource(R.string.status_enabled_not_connected)
                         else -> stringResource(R.string.status_accessibility_off)
                     },
-                    status = if (accessibilityOn) Status.OK else Status.MISSING,
-                    actionLabel = if (accessibilityOn) null else stringResource(R.string.action_open),
+                    status = when {
+                        accessibilityOn && serviceRunning -> Status.OK
+                        accessibilityOn -> Status.UNKNOWN
+                        else -> Status.MISSING
+                    },
+                    actionLabel = if (accessibilityOn && serviceRunning) null else stringResource(R.string.action_open),
                     onAction = { PermissionUtils.openAccessibilitySettings(context) }
                 )
                 StatusRow(
