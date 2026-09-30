@@ -42,6 +42,12 @@ android {
         buildConfig = true
     }
 
+    lint {
+        // New strings are translated to English + Vietnamese only in this personal fork.
+        warning += "MissingTranslation"
+        abortOnError = false
+    }
+
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false

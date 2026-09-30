@@ -168,4 +168,54 @@
     <string name="rate_dialog_signature">Chayan</string>
     <string name="rate_dialog_leave_review">Leave a 5★ review</string>
     <string name="rate_dialog_email_me">Email me</string>
+
+    <!-- ===== Personal Huawei fork additions ===== -->
+    <string name="search_apps_hint">Search by name or package…</string>
+    <string name="excluded_apps_note">Quick Ball only removes its own floating UI while these apps are open. Accessibility stays on and is still visible to other apps; some banking apps may refuse to run whenever any accessibility service is enabled.</string>
+
+    <string name="background_title">Background &amp; Huawei</string>
+    <string name="background_nav_description">Permissions status and keep-alive setup</string>
+    <string name="background_status_header">Status</string>
+    <string name="background_behavior_header">Background behavior</string>
+    <string name="action_open">Open</string>
+
+    <string name="status_accessibility">Accessibility service</string>
+    <string name="status_running">Enabled and running</string>
+    <string name="status_enabled_not_connected">Enabled, waiting for the system to connect</string>
+    <string name="status_accessibility_off">Off — the ball cannot appear</string>
+    <string name="status_system_settings">Modify system settings</string>
+    <string name="status_system_settings_detail">Needed for brightness and auto-rotate</string>
+    <string name="status_device_admin">Device admin</string>
+    <string name="status_device_admin_not_needed">Not needed — Lock screen uses the accessibility API</string>
+    <string name="status_device_admin_old_android">Lock screen needs Android 9 or newer</string>
+    <string name="status_battery">Battery optimization</string>
+    <string name="status_battery_ok">Not optimized (good)</string>
+    <string name="status_battery_missing">Optimized — the system may stop Quick Ball</string>
+    <string name="status_background_launch">App launch / background run</string>
+    <string name="status_background_launch_detail">Cannot be checked by apps. Set it to Manage manually and turn all three switches on.</string>
+    <string name="status_last_connected">Service last connected: %1$s</string>
+
+    <string name="exclude_from_recents_title">Hide from Recent apps</string>
+    <string name="exclude_from_recents_description">The settings screen won\'t appear in Recents, so clearing Recents can\'t close Quick Ball by accident.</string>
+    <string name="keep_alive_title">Keep-alive notification</string>
+    <string name="keep_alive_description">Optional. Shows a silent ongoing notification that may help against aggressive battery managers.</string>
+
+    <string name="huawei_guide_header">Huawei / HarmonyOS setup</string>
+    <string name="generic_guide_header">Setup for reliable background use</string>
+    <string name="huawei_detected">Detected: %1$s · %2$s</string>
+    <string name="guide_step_app_launch">App launch → Quick Ball → Manage manually → turn on Auto-launch, Secondary launch and Run in background.</string>
+    <string name="guide_step_battery">Battery optimization → All apps → Quick Ball → Don\'t allow.</string>
+    <string name="guide_step_recents">If you keep Quick Ball in Recents instead of hiding it, swipe its card down to lock it.</string>
+    <string name="guide_step_accessibility">Accessibility → Quick Ball → On (re-check after updates).</string>
+    <string name="guide_step_tile">Add the Quick Ball tile to Quick Settings for one-tap recovery.</string>
+    <string name="guide_limitations">These Huawei settings can\'t be changed by apps. If Quick Ball is force-stopped, the system turns its accessibility service off — open Quick Ball (or tap the tile) to turn it back on.</string>
+
+    <string name="channel_keep_alive">Keep-alive</string>
+    <string name="channel_service_status">Service status</string>
+    <string name="keep_alive_notification_title">Quick Ball is active</string>
+    <string name="keep_alive_notification_text">Tap to open settings</string>
+    <string name="service_off_notification_title">Quick Ball is turned off</string>
+    <string name="service_off_notification_text">The system disabled its accessibility service. Tap to turn it back on.</string>
+    <string name="tile_subtitle_running">Running</string>
+    <string name="tile_subtitle_service_off">Tap to fix</string>
 </resources>

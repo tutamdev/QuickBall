@@ -19,7 +19,8 @@ object LanguageUtils {
         ITALIAN("it", "Italiano"),
         PORTUGUESE("pt", "Português"),
         SPANISH("es", "Español"),
-        GERMAN("de", "Deutsch");
+        GERMAN("de", "Deutsch"),
+        VIETNAMESE("vi", "Tiếng Việt");
 
         companion object {
             private val codeMap = entries.associateBy { it.code }

@@ -1,0 +1,65 @@
+name: Build debug APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Lint
+        run: ./gradlew --no-daemon lintDebug
+
+      - name: Assemble debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Check merged manifest
+        run: |
+          M=$(find app/build/intermediates -path '*debug*' -name AndroidManifest.xml | grep merged_manifest | head -1)
+          echo "Merged manifest: $M"
+          for c in QuickBallService KeepAliveService QuickBallTileService BootReceiver BOOT_COMPLETED FOREGROUND_SERVICE_SPECIAL_USE; do
+            grep -q "$c" "$M" && echo "OK   $c" || { echo "MISSING $c"; exit 1; }
+          done
+          # Accessibility capabilities must stay minimal (no window-content access).
+          if grep -q canRetrieveWindowContent app/src/main/res/xml/accessibility_service_config.xml; then
+            echo "canRetrieveWindowContent must not be enabled"; exit 1; fi
+          # This fork never modifies accessibility/secure settings itself.
+          if grep -q WRITE_SECURE_SETTINGS "$M"; then
+            echo "WRITE_SECURE_SETTINGS must not be declared"; exit 1; fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickball-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/test-results/

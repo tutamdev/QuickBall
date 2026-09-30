@@ -16,7 +16,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import io.github.chayanforyou.quickball.core.persistence.KeepAliveService
+import io.github.chayanforyou.quickball.core.persistence.RecentsHelper
+import io.github.chayanforyou.quickball.domain.AppPreference
 import io.github.chayanforyou.quickball.ui.navigation.Screen
+import io.github.chayanforyou.quickball.ui.screens.background.BackgroundSettingsScreen
 import io.github.chayanforyou.quickball.ui.screens.settings.AdvancedSettingsScreen
 import io.github.chayanforyou.quickball.ui.screens.autohide.AutoHideSettingsScreen
 import io.github.chayanforyou.quickball.ui.screens.home.HomeScreen
@@ -32,6 +36,15 @@ class MainActivity : ComponentActivity() {
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LanguageUtils.getLocalizedContext(newBase))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val prefs = AppPreference.getInstance(this)
+        // Keep the settings task out of Recents so swiping it away can't force-stop Quick Ball.
+        RecentsHelper.apply(this, prefs.isExcludeFromRecentsEnabled)
+        // Starting a foreground service is always allowed while this activity is visible.
+        KeepAliveService.syncWithPreference(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,6 +88,7 @@ class MainActivity : ComponentActivity() {
                             onNavigateToShortcuts = { navController.navigate(Screen.ShortcutMenu.name) },
                             onNavigateToAutoHide = { navController.navigate(Screen.AutoHideSettings.name) },
                             onNavigateToAdvanced = { navController.navigate(Screen.AdvancedSettings.name) },
+                            onNavigateToBackground = { navController.navigate(Screen.BackgroundSettings.name) },
                             modifier = Modifier.fillMaxSize(),
                             viewModel = viewModel
                         )
@@ -121,6 +135,13 @@ class MainActivity : ComponentActivity() {
                             onNavigateBack = { navController.navigateUp() },
                             modifier = Modifier.fillMaxSize(),
                             viewModel = viewModel
+                        )
+                    }
+
+                    composable(Screen.BackgroundSettings.name) {
+                        BackgroundSettingsScreen(
+                            onNavigateBack = { navController.navigateUp() },
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
 

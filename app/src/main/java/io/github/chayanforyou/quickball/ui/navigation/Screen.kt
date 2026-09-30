@@ -7,5 +7,6 @@ enum class Screen {
     SelectShortcut,
     SelectApps,
     AutoHideSettings,
+    BackgroundSettings,
     AdvancedSettings
 }

@@ -48,6 +48,7 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.chayanforyou.quickball.R
+import io.github.chayanforyou.quickball.core.QuickBallService
 import io.github.chayanforyou.quickball.domain.models.InstalledApp
 import io.github.chayanforyou.quickball.ui.theme.AppCardDefaults
 import io.github.chayanforyou.quickball.ui.viewmodels.QuickBallViewModel
@@ -79,24 +80,33 @@ fun AutoHideSettingsScreen(
 
     val filteredApps = remember(searchQuery, installedApps) {
         if (searchQuery.isBlank()) installedApps
-        else installedApps.filter { it.appName.contains(searchQuery, ignoreCase = true) }
+        else installedApps.filter {
+            it.appName.contains(searchQuery, ignoreCase = true) ||
+                    it.packageName.contains(searchQuery, ignoreCase = true)
+        }
     }
 
     val isAllSelected = remember(autoHideApps, installedApps) {
         installedApps.isNotEmpty() && autoHideApps.containsAll(installedApps.map { it.packageName })
     }
 
+    // Apply list changes to the running service immediately (no need to switch apps).
+    fun notifyService() = QuickBallService.dispatch(context, QuickBallService.ACTION_REFRESH)
+
     fun toggleAppSelection(packageName: String) {
         viewModel.toggleAutoHideApp(packageName)
+        notifyService()
     }
 
     fun selectAll() {
         val allPackages = installedApps.map { it.packageName }.toSet()
         viewModel.setAutoHideApps(allPackages)
+        notifyService()
     }
 
     fun deselectAll() {
         viewModel.setAutoHideApps(emptySet())
+        notifyService()
     }
 
     Scaffold(
@@ -145,7 +155,7 @@ fun AutoHideSettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp),
-                placeholder = { Text("Search apps...") },
+                placeholder = { Text(stringResource(R.string.search_apps_hint)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -156,6 +166,13 @@ fun AutoHideSettingsScreen(
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(24.dp)
+            )
+
+            Text(
+                text = stringResource(R.string.excluded_apps_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp)
             )
 
             if (isLoading) {
@@ -194,15 +211,23 @@ fun AutoHideSettingsScreen(
                                     modifier = Modifier.size(36.dp)
                                 )
                                 Spacer(modifier = Modifier.width(16.dp))
-                                Text(
-                                    text = app.appName,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Normal,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = app.appName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = app.packageName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                                 Switch(
                                     checked = isSelected,
                                     onCheckedChange = { toggleAppSelection(app.packageName) }

@@ -71,6 +71,7 @@ fun HomeScreen(
     onNavigateToShortcuts: () -> Unit,
     onNavigateToAutoHide: () -> Unit,
     onNavigateToAdvanced: () -> Unit,
+    onNavigateToBackground: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: QuickBallViewModel = viewModel()
 ) {
@@ -326,6 +327,12 @@ fun HomeScreen(
                         title = stringResource(R.string.hide_automatically_title),
                         subtitle = stringResource(R.string.hide_automatically_description),
                         onClick = onNavigateToAutoHide
+                    )
+
+                    SettingNavigationRow(
+                        title = stringResource(R.string.background_title),
+                        subtitle = stringResource(R.string.background_nav_description),
+                        onClick = onNavigateToBackground
                     )
 
                     SettingSwitchRow(

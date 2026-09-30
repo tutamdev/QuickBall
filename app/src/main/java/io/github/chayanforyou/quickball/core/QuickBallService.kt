@@ -10,6 +10,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.view.inputmethod.InputMethodManager
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.Build
@@ -23,6 +26,10 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.animation.PathInterpolator
 import androidx.core.content.getSystemService
+import io.github.chayanforyou.quickball.core.persistence.KeepAliveService
+import io.github.chayanforyou.quickball.core.persistence.ServiceStatusNotifier
+import io.github.chayanforyou.quickball.core.visibility.ForegroundAppTracker
+import io.github.chayanforyou.quickball.core.visibility.VisibilityRules
 import io.github.chayanforyou.quickball.domain.AppPreference
 import io.github.chayanforyou.quickball.domain.models.MenuAction
 import io.github.chayanforyou.quickball.domain.handlers.QuickBallActionHandler
@@ -34,6 +41,7 @@ import io.github.chayanforyou.quickball.ui.floating.SideKickView
 import io.github.chayanforyou.quickball.utils.DensityUtils
 import io.github.chayanforyou.quickball.utils.getScreenSize
 import io.github.chayanforyou.quickball.utils.performHapticFeedback
+import java.lang.ref.WeakReference
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -49,9 +57,33 @@ class QuickBallService : AccessibilityService() {
         const val ACTION_UNSTASH = "io.github.chayanforyou.quickball.action.UNSTASH"
         const val ACTION_UPDATE_BALL = "io.github.chayanforyou.quickball.action.UPDATE_BALL"
         const val ACTION_UPDATE_PILL = "io.github.chayanforyou.quickball.action.UPDATE_PILL"
+        /** Re-evaluate visibility (e.g. after the Excluded Apps list changed). */
+        const val ACTION_REFRESH = "io.github.chayanforyou.quickball.action.REFRESH"
 
-        private const val APP_PACKAGE_PREFIX = "io.github.chayanforyou.quickball"
-        private val EXCLUDED_APPS = setOf(
+        @Volatile
+        private var instanceRef: WeakReference<QuickBallService>? = null
+
+        /** True while the accessibility service is connected in this process. */
+        val isRunning: Boolean get() = instanceRef?.get() != null
+
+        /**
+         * Deliver an action to the running service. Uses the in-process instance
+         * first (works from TileService / receivers without background-start
+         * restrictions), falls back to startService from foreground UI.
+         */
+        fun dispatch(context: Context, action: String) {
+            val service = instanceRef?.get()
+            if (service != null) {
+                Handler(Looper.getMainLooper()).post { service.handleAction(action) }
+                return
+            }
+            runCatching {
+                context.startService(Intent(context, QuickBallService::class.java).setAction(action))
+            }.onFailure { Log.w(TAG, "dispatch($action) failed: ${it.message}") }
+        }
+
+        /** Packages whose window events must never be treated as "foreground app". */
+        private val SYSTEM_IGNORED_PACKAGES = setOf(
             "com.android.systemui",
             "com.android.intentresolver",
             "com.google.android.permissioncontroller",
@@ -133,7 +165,6 @@ class QuickBallService : AccessibilityService() {
     private var fabAnimator: ValueAnimator? = null
     private val stashHandler = Handler(Looper.getMainLooper())
     private val stashRunnable = Runnable { onInactivityTimeout() }
-    private var lastForegroundPackage = ""
 
     // System Services & State
     private val keyguard by lazy { getSystemService<KeyguardManager>() as KeyguardManager }
@@ -145,30 +176,65 @@ class QuickBallService : AccessibilityService() {
     private val isEnabled get() = prefs.isQuickBallEnabled
     private val autoHideApps get() = prefs.autoHideApps
     private val showOnLockScreen get() = prefs.isShowOnLockScreenEnabled
-    private val hideForLandscape get() = prefs.isHideOnLandscapeEnabled && isLandscape
+
+    // Foreground app detection (activity transitions only, no window content access)
+    private var imePackages: Set<String> = emptySet()
+    private val activityCache = object : LinkedHashMap<String, Boolean>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?) = size > 256
+    }
+    private val foregroundTracker by lazy {
+        ForegroundAppTracker(
+            isActivity = ::isRealActivity,
+            ignoredPackages = { SYSTEM_IGNORED_PACKAGES + imePackages }
+        )
+    }
 
     /* -------------------- Lifecycle -------------------- */
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instanceRef = WeakReference(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        refreshImePackages()
         initFloatingBall()
         registerScreenReceiver()
+        prefs.lastServiceConnectedAt = System.currentTimeMillis()
+        ServiceStatusNotifier.cancel(this)
+        KeepAliveService.syncWithPreference(this)
+        refreshBallVisibility()
+        Log.i(TAG, "Accessibility service connected")
     }
 
+    /**
+     * Note: for an AccessibilityService the system owns the binding, so
+     * START_STICKY has no real effect on restarts; it is kept for the
+     * startService()-based action channel used by the settings UI.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_ENABLE -> showBall()
+        intent?.action?.let { handleAction(it) }
+        return START_STICKY
+    }
+
+    internal fun handleAction(action: String) {
+        when (action) {
+            ACTION_ENABLE -> refreshBallVisibility()
             ACTION_DISABLE -> hideBall()
             ACTION_STASH -> stashFab()
             ACTION_UNSTASH -> unstashFab()
             ACTION_UPDATE_BALL -> updateBall()
             ACTION_UPDATE_PILL -> updatePill()
+            ACTION_REFRESH -> refreshBallVisibility()
         }
-        return START_STICKY
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        Log.i(TAG, "Accessibility service unbound")
+        return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        if (instanceRef?.get() === this) instanceRef = null
+        KeepAliveService.stop(this)
         stopInactivityTimer()
         removePill()
         removeFabWindow()
@@ -202,14 +268,16 @@ class QuickBallService : AccessibilityService() {
     /* -------------------- Accessibility & System Events -------------------- */
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        val packageName = event.packageName?.toString() ?: return
-
-        if (!shouldHandlePackage(packageName)) {
-            return
-        }
+        // Only real activity transitions can change the foreground app.
+        // TYPE_WINDOWS_CHANGED (still subscribed in the config) is ignored here.
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
         try {
-            onForegroundPackageChanged(packageName)
+            val changed = foregroundTracker.onWindowStateChanged(
+                event.packageName?.toString(),
+                event.className?.toString()
+            )
+            if (changed) refreshBallVisibility()
         } catch (e: Exception) {
             Log.e(TAG, "Error processing foreground package change", e)
         }
@@ -223,53 +291,54 @@ class QuickBallService : AccessibilityService() {
         recalculatePosition()
     }
 
-    private fun shouldHandlePackage(packageName: String): Boolean {
-        return packageName != APP_PACKAGE_PREFIX && packageName !in EXCLUDED_APPS
+    /** Cached PackageManager lookup: is [className] a declared Activity of [packageName]? */
+    private fun isRealActivity(packageName: String, className: String): Boolean {
+        val key = "$packageName/$className"
+        activityCache[key]?.let { return it }
+        val result = try {
+            @Suppress("DEPRECATION")
+            packageManager.getActivityInfo(ComponentName(packageName, className), 0)
+            true
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        } catch (_: Exception) {
+            false
+        }
+        activityCache[key] = result
+        return result
     }
 
-    private fun onForegroundPackageChanged(packageName: String) {
-        val triggeringPackage = lastForegroundPackage
-        lastForegroundPackage = packageName
-
-        if (triggeringPackage in autoHideApps) {
-            return
-        }
-
-        refreshBallVisibility()
+    /** Keyboards emit window events on top of apps; never treat them as foreground. */
+    private fun refreshImePackages() {
+        imePackages = runCatching {
+            getSystemService<InputMethodManager>()?.enabledInputMethodList
+                ?.map { it.packageName }?.toSet()
+        }.getOrNull() ?: emptySet()
     }
 
     /* -------------------- Visibility Engine -------------------- */
 
     private fun refreshBallVisibility() {
-        if (!isEnabled) {
-            hideBall()
-            return
-        }
-
-        // Lock state
-        if (isLocked) {
-            if (showOnLockScreen) {
+        val decision = VisibilityRules.decide(
+            VisibilityRules.Input(
+                isEnabled = isEnabled,
+                isLocked = isLocked,
+                showOnLockScreen = showOnLockScreen,
+                isLandscape = isLandscape,
+                hideOnLandscape = prefs.isHideOnLandscapeEnabled,
+                foregroundPackage = foregroundTracker.currentPackage,
+                excludedPackages = autoHideApps,
+            )
+        )
+        when (decision) {
+            VisibilityRules.Decision.HIDE -> hideBall()
+            VisibilityRules.Decision.SHOW -> showBall()
+            VisibilityRules.Decision.SHOW_STASHED -> {
                 startCollapsingMenu()
                 showBall()
                 stashFab(animated = false)
-            } else {
-                hideBall()
             }
-            return
         }
-
-        // Unlock state
-        if (hideForLandscape || isAutoHideApp()) {
-            hideBall()
-            return
-        }
-
-        showBall()
-    }
-
-    private fun isAutoHideApp(): Boolean {
-        val pkg = lastForegroundPackage
-        return pkg in autoHideApps
     }
 
     private fun showBall() {
@@ -812,6 +881,7 @@ class QuickBallService : AccessibilityService() {
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_USER_PRESENT) refreshImePackages()
             refreshBallVisibility()
         }
     }

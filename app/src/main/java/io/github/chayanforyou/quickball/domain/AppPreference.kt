@@ -50,6 +50,9 @@ class AppPreference private constructor(context: Context) {
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_HAPTIC_FEEDBACK_ENABLED = "haptic_feedback_enabled"
         private const val KEY_HAPTIC_INTENSITY = "haptic_intensity"
+        private const val KEY_KEEP_ALIVE_NOTIFICATION = "keep_alive_notification"
+        private const val KEY_EXCLUDE_FROM_RECENTS = "exclude_from_recents"
+        private const val KEY_LAST_SERVICE_CONNECTED_AT = "last_service_connected_at"
 
         private val gson = Gson()
         private val menuItemListType = object : TypeToken<List<QuickBallMenuItem>>() {}.type
@@ -187,6 +190,20 @@ class AppPreference private constructor(context: Context) {
     var autoHideApps: Set<String>
         get() = prefs.getStringSet(KEY_SELECTED_APPS, emptySet()) ?: emptySet()
         set(value) = prefs.edit { putStringSet(KEY_SELECTED_APPS, value) }
+
+    /** Optional foreground-service notification to raise process priority on OEM ROMs. */
+    var isKeepAliveNotificationEnabled: Boolean
+        get() = prefs.getBoolean(KEY_KEEP_ALIVE_NOTIFICATION, false)
+        set(value) = prefs.edit { putBoolean(KEY_KEEP_ALIVE_NOTIFICATION, value) }
+
+    /** Hide the settings screen from Recents so it cannot be swiped away by accident. */
+    var isExcludeFromRecentsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_EXCLUDE_FROM_RECENTS, true)
+        set(value) = prefs.edit { putBoolean(KEY_EXCLUDE_FROM_RECENTS, value) }
+
+    var lastServiceConnectedAt: Long
+        get() = prefs.getLong(KEY_LAST_SERVICE_CONNECTED_AT, 0L)
+        set(value) = prefs.edit { putLong(KEY_LAST_SERVICE_CONNECTED_AT, value) }
 
     var selectedMenuItems: List<QuickBallMenuItem>
         get() {
