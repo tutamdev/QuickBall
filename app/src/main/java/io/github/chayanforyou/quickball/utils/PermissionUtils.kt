@@ -32,14 +32,20 @@ object PermissionUtils {
         return services.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
     }
 
-    private fun isEnabledInSecureSettings(context: Context): Boolean = runCatching {
-        val cr = context.contentResolver
-        if (Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 0) != 1) return false
-        val own = ComponentName(context, QuickBallService::class.java)
-        Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
-            .split(':')
-            .any { ComponentName.unflattenFromString(it) == own }
-    }.getOrDefault(false)
+    private fun isEnabledInSecureSettings(context: Context): Boolean {
+        return try {
+            val cr = context.contentResolver
+            val globallyOn = Settings.Secure.getInt(cr, Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1
+            val own = ComponentName(context, QuickBallService::class.java)
+            val listed = Settings.Secure.getString(cr, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+                .orEmpty()
+                .split(':')
+                .any { ComponentName.unflattenFromString(it) == own }
+            globallyOn && listed
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     fun canModifySystemSettings(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
