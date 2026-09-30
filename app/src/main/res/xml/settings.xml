@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        app:key="permissions"
+        app:title="@string/permissions_title"
+        app:iconSpaceReserved="false" />
+
+    <PreferenceCategory app:title="@string/cat_button" app:iconSpaceReserved="false">
+        <SwitchPreferenceCompat
+            app:key="enabled"
+            app:defaultValue="true"
+            app:title="@string/pref_enabled"
+            app:iconSpaceReserved="false" />
+        <SwitchPreferenceCompat
+            app:key="auto_start"
+            app:defaultValue="true"
+            app:title="@string/pref_auto_start"
+            app:summary="@string/pref_auto_start_summary"
+            app:iconSpaceReserved="false" />
+        <SeekBarPreference
+            app:key="size_dp"
+            app:defaultValue="48"
+            app:min="32"
+            android:max="80"
+            app:showSeekBarValue="true"
+            app:title="@string/pref_size"
+            app:iconSpaceReserved="false"
+            xmlns:android="http://schemas.android.com/apk/res/android" />
+        <SeekBarPreference
+            app:key="opacity"
+            app:defaultValue="80"
+            app:min="20"
+            android:max="100"
+            app:showSeekBarValue="true"
+            app:title="@string/pref_opacity"
+            app:iconSpaceReserved="false"
+            xmlns:android="http://schemas.android.com/apk/res/android" />
+        <ListPreference
+            app:key="side"
+            app:defaultValue="right"
+            app:entries="@array/side_entries"
+            app:entryValues="@array/side_values"
+            app:title="@string/pref_side"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false" />
+        <Preference
+            app:key="reset_position"
+            app:title="@string/pref_reset_position"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/cat_actions" app:iconSpaceReserved="false">
+        <MultiSelectListPreference
+            app:key="actions"
+            app:defaultValue="@array/action_values"
+            app:entries="@array/action_entries"
+            app:entryValues="@array/action_values"
+            app:title="@string/pref_actions"
+            app:iconSpaceReserved="false" />
+        <ListPreference
+            app:key="stream"
+            app:defaultValue="music"
+            app:entries="@array/stream_entries"
+            app:entryValues="@array/stream_values"
+            app:title="@string/pref_stream"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false" />
+        <ListPreference
+            app:key="lock_mode"
+            app:defaultValue="admin"
+            app:entries="@array/lock_mode_entries"
+            app:entryValues="@array/lock_mode_values"
+            app:title="@string/pref_lock_mode"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false" />
+        <ListPreference
+            app:key="lock_app"
+            app:title="@string/pref_lock_app"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false" />
+    </PreferenceCategory>
+</PreferenceScreen>

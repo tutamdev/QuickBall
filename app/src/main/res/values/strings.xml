@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MiniBall</string>
+    <string name="channel_name">Nút nổi</string>
+    <string name="notification_title">MiniBall đang chạy</string>
+    <string name="notification_text">Chạm để mở cài đặt</string>
+
+    <string name="action_vol_up">Tăng âm lượng</string>
+    <string name="action_vol_down">Giảm âm lượng</string>
+    <string name="action_lock">Khóa màn hình</string>
+    <string name="action_grant">Cấp quyền</string>
+    <string name="action_open">Mở</string>
+    <string name="action_disable">Tắt</string>
+
+    <string name="volume_blocked_dnd">Không đổi được âm lượng chuông khi đang bật Không làm phiền</string>
+    <string name="lock_not_configured">Chưa bật Quản trị thiết bị hoặc chưa chọn app khóa màn hình</string>
+    <string name="admin_explanation">MiniBall chỉ dùng quyền này để tắt màn hình khi bạn bấm nút Khóa. Không có quyền xóa dữ liệu hay đổi mật khẩu.</string>
+
+    <string name="permissions_title">Quyền cần thiết</string>
+    <string name="permissions_summary_ok">Đã có quyền hiển thị nút nổi</string>
+    <string name="permissions_summary_missing">Thiếu quyền hiển thị nút nổi — chạm để cấp</string>
+
+    <string name="cat_button">Nút nổi</string>
+    <string name="cat_actions">Thao tác</string>
+    <string name="pref_enabled">Bật nút nổi</string>
+    <string name="pref_auto_start">Tự khởi động cùng máy</string>
+    <string name="pref_auto_start_summary">Hiện nút nổi sau khi khởi động lại điện thoại</string>
+    <string name="pref_size">Kích thước (dp)</string>
+    <string name="pref_opacity">Độ đậm (%)</string>
+    <string name="pref_side">Vị trí</string>
+    <string name="pref_reset_position">Đặt lại vị trí</string>
+    <string name="pref_actions">Các nút trong menu</string>
+    <string name="pref_stream">Âm lượng điều chỉnh</string>
+    <string name="pref_lock_mode">Cách khóa màn hình</string>
+    <string name="pref_lock_app">App khóa màn hình</string>
+
+    <string name="perm_overlay_title">Hiển thị trên ứng dụng khác</string>
+    <string name="perm_overlay_detail">Bắt buộc. Đây là quyền để vẽ nút nổi lên trên các app khác.</string>
+    <string name="perm_admin_title">Quản trị thiết bị</string>
+    <string name="perm_admin_detail">Cần nếu khóa màn hình bằng lockNow. Chỉ có quyền khóa màn hình. Lưu ý: lần mở khóa sau có thể phải nhập mã PIN thay vì vân tay. Phải tắt quyền này trước khi gỡ app.</string>
+    <string name="perm_battery_title">Tối ưu hóa pin</string>
+    <string name="perm_battery_detail">Khuyến nghị: chọn MiniBall → Không cho phép.</string>
+    <string name="perm_notif_title">Thông báo</string>
+    <string name="perm_notif_detail">Không bắt buộc. Android yêu cầu dịch vụ chạy nền có một thông báo; bạn có thể thu gọn nó.</string>
+    <string name="perm_launch_title">Khởi chạy ứng dụng (Huawei)</string>
+    <string name="perm_launch_detail">App không tự kiểm tra được. Chọn Quản lý thủ công, bật Tự khởi chạy, Khởi chạy phụ, Chạy trong nền.</string>
+    <string name="huawei_guide">Thiết lập Huawei để chạy ổn định:\n1. Cài đặt → Ứng dụng → Khởi chạy ứng dụng → MiniBall → Quản lý thủ công → bật cả 3 công tắc.\n2. Cài đặt → Pin → Tối ưu hóa pin → MiniBall → Không cho phép.\n3. Mở Đa nhiệm, kéo thẻ MiniBall xuống để khóa.\n4. Nếu bạn Buộc dừng app, nút nổi sẽ không tự chạy lại cho tới khi mở app.</string>
+</resources>

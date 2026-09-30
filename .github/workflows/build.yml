@@ -1,0 +1,64 @@
+name: Build debug APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Android SDK info
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Build and lint
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace lintDebug assembleDebug 2>&1 | tee build.log
+      - name: Report build errors
+        if: failure()
+        run: |
+          # Surface the important part of the log as annotations
+          grep -E "^e: |^w: .*error|error:|FAILURE|What went wrong|Caused by|Could not" build.log | grep -v "^\s*at " | head -60 | while IFS= read -r l; do echo "::error::${l:0:900}"; done
+          tail -40 build.log | while IFS= read -r l; do echo "::warning::${l:0:900}"; done
+
+      - name: Check merged manifest
+        run: |
+          M=$(find app/build/intermediates -path '*debug*' -name AndroidManifest.xml | grep merged_manifest | head -1)
+          echo "Merged manifest: $M"
+          for c in OverlayService LockAdminReceiver BootReceiver BOOT_COMPLETED SYSTEM_ALERT_WINDOW FOREGROUND_SERVICE_SPECIAL_USE; do
+            grep -q "$c" "$M" && echo "OK   $c" || { echo "::error::MISSING $c"; exit 1; }
+          done
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: miniball-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            build.log
